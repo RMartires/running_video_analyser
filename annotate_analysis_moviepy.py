@@ -5,7 +5,9 @@ import mediapipe as mp
 import math
 from PIL import ImageFont
 
+
 font = ImageFont.load_default()
+print(font)
 
 # --- Helper functions for metrics (reuse logic from running_analysis.py) ---
 def calculate_torso_angle(landmarks):
@@ -53,11 +55,11 @@ def make_text_frame(t):
             f"Posture Angle: {angle_per_frame[idx]:.1f}°")
     txt_clip = TextClip(
         txt,
-        font,
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
         font_size=fontsize,
         color='white',
         bg_color='rgba(30,30,30,0.7)',
-        method='caption',
+        method='label',
         size=(int(width*0.15), None)
     )
     return txt_clip.get_frame(t)
