@@ -8,8 +8,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # --- Polished Drawing Helpers (Pillow for text/panels, OpenCV for overlays) ---
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Change if needed
-FONT_SIZE_MAIN = 32
-FONT_SIZE_SECONDARY = 26
+# FONT_SIZE_MAIN and FONT_SIZE_SECONDARY will be set dynamically after video size is known
 PANEL_COLOR = (30, 30, 30, 200)  # RGBA
 PANEL_RADIUS = 20
 PANEL_PADDING = 16
@@ -26,10 +25,14 @@ def draw_metrics_panel(frame, metrics, top_left, font_main, font_secondary):
     # Convert frame to PIL RGBA
     img_pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert("RGBA")
     draw = ImageDraw.Draw(img_pil)
+    frame_h, frame_w = frame.shape[:2]
+    max_panel_w = int(frame_w * 0.15)
+    max_panel_h = int(frame_h * 0.10)
     # Calculate panel size
     max_label_w = 0
     max_value_w = 0
     total_h = PANEL_PADDING
+    label_value_sizes = []
     for label, value, color, is_main in metrics:
         font = font_main if is_main else font_secondary
         label_bbox = draw.textbbox((0,0), label, font=font)
@@ -39,24 +42,37 @@ def draw_metrics_panel(frame, metrics, top_left, font_main, font_secondary):
         max_label_w = max(max_label_w, label_w)
         max_value_w = max(max_value_w, value_w)
         total_h += max(label_h, value_h) + PANEL_SPACING
+        label_value_sizes.append((label_w, label_h, value_w, value_h))
     total_h += PANEL_PADDING - PANEL_SPACING
     panel_w = PANEL_PADDING + max_label_w + 16 + max_value_w + PANEL_PADDING
     panel_h = total_h
+    # Enforce max panel size
+    if panel_w > max_panel_w:
+        panel_w = max_panel_w
+    if panel_h > max_panel_h:
+        panel_h = max_panel_h
     # Draw rounded panel
     draw_rounded_panel_pil(draw, top_left, panel_w, panel_h, PANEL_RADIUS, PANEL_COLOR)
-    # Draw metrics
+    # Draw metrics (fit text within panel)
     x, y = top_left[0] + PANEL_PADDING, top_left[1] + PANEL_PADDING
-    for label, value, color, is_main in metrics:
+    available_w = panel_w - 2 * PANEL_PADDING
+    for i, (label, value, color, is_main) in enumerate(metrics):
         font = font_main if is_main else font_secondary
+        label_w, label_h, value_w, value_h = label_value_sizes[i]
+        # If text is too wide, shrink font or truncate
+        max_text_w = available_w - 16
+        if label_w + value_w > max_text_w:
+            # Truncate value if needed
+            max_value_w = max_text_w - label_w
+            if max_value_w < 30:
+                value = value[:max(1, int(len(value) * max_value_w / value_w))] + '…'
         # Draw label
         draw.text((x, y), label, font=font, fill=(220,220,220,255))
         # Draw value
-        label_bbox = draw.textbbox((0,0), label, font=font)
-        label_w, label_h = label_bbox[2] - label_bbox[0], label_bbox[3] - label_bbox[1]
-        value_bbox = draw.textbbox((0,0), value, font=font)
-        value_h = value_bbox[3] - value_bbox[1]
         draw.text((x + max_label_w + 16, y), value, font=font, fill=color)
         y += max(label_h, value_h) + PANEL_SPACING
+        if y > top_left[1] + panel_h - PANEL_PADDING:
+            break  # Don't overflow panel
     # Convert back to OpenCV BGR
     frame = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGBA2BGR)
     return frame
@@ -139,9 +155,13 @@ if __name__ == "__main__":
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # type: ignore
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-    mp_pose = mp.solutions.pose  # type: ignore
+    # Dynamically set font sizes based on video height
+    FONT_SIZE_MAIN = max(12, int(height * 0.05))
+    FONT_SIZE_SECONDARY = max(10, int(height * 0.035))
     font_main = ImageFont.truetype(FONT_PATH, FONT_SIZE_MAIN)
     font_secondary = ImageFont.truetype(FONT_PATH, FONT_SIZE_SECONDARY)
+
+    mp_pose = mp.solutions.pose  # type: ignore
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         left_ankle_y = []
         right_ankle_y = []
