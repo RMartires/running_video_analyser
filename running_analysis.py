@@ -111,8 +111,6 @@ def processRunningVideo(video_path):
     right_strikes = [valid_indices[i] for i in right_strikes if i < len(valid_indices)]
     total_strikes = len(left_strikes) + len(right_strikes)
 
-    print(left_ankle_y)
-    print(right_ankle_y)
     # Step 4: Calculate cadence
     cadence = calculate_cadence(left_strikes, right_strikes, duration)
     # Step 5: Determine foot strike pattern
