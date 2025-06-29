@@ -5,6 +5,8 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import subprocess
 from enum import Enum
+import time
+from send_email import send_processing_completion_email, generate_video_url
 
 # Load environment variables
 load_dotenv()
@@ -158,17 +160,42 @@ def main():
         
         logger.info(f"Processing submission ID: {submission_id}, File: {file_name}, Email: {email}")
         
+        # Start timing
+        start_time = time.time()
+        
         # Process the video
         output_file = process_video_submission('uploads/'+file_name)
         
+        # Calculate processing time
+        processing_time = time.time() - start_time
+        processing_time_str = f"{int(processing_time // 60)} minutes {int(processing_time % 60)} seconds"
+        
+        # Generate video URL for email
+        video_url = generate_video_url(output_file)
+        
         # Mark as processed
         processed_data = {
-            'processing_completed_at': datetime.utcnow().isoformat(),
-            'output_file': output_file
+            'updated_at': datetime.utcnow().isoformat(),
+            'output_file': output_file,
         }
         mark_submission_processed(submission_id, output_file, processed_data)
         
         logger.info(f"Successfully processed submission {submission_id}")
+        
+        # Send email notification
+        try:
+            email_sent = send_processing_completion_email(
+                user_email=email,
+                video_name=file_name,
+                output_file_url=video_url,
+                processing_time=processing_time_str
+            )
+            if email_sent:
+                logger.info(f"Email notification sent successfully to {email}")
+            else:
+                logger.warning(f"Failed to send email notification to {email}")
+        except Exception as email_error:
+            logger.error(f"Error sending email notification to {email}: {email_error}")
         
     except Exception as e:
         logger.error(f"Cron job failed: {e}")
