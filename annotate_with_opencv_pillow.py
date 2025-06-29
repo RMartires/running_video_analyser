@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import os
 import mediapipe as mp
+import math
 
 # Example metrics for demonstration (replace with your own logic)
 def get_metrics_for_frame(frame_idx):
@@ -21,7 +22,6 @@ def draw_gradient_triangle(img_pil, base_center, angle_deg, size, alpha=128):
     size: length of triangle sides
     alpha: transparency (0-255)
     """
-    import math
     x, y = base_center
     angle_rad = math.radians(angle_deg)
     # Triangle points: tip and two base corners
@@ -68,8 +68,6 @@ def draw_gradient_angle(img_pil, center, angle_deg, radius=40, width=12, alpha=1
     width: thickness of the arc
     alpha: transparency (0-255)
     """
-    import math
-    from PIL import ImageDraw
     arc_img = Image.new('RGBA', img_pil.size, (0,0,0,0))
     arc_draw = ImageDraw.Draw(arc_img)
     x, y = center
@@ -128,7 +126,6 @@ def draw_posture_angle_overlay(img_pil, center, angle_deg, length=60, alpha=128)
     length: length of the lines
     alpha: transparency (0-255)
     """
-    import math
     overlay = Image.new('RGBA', img_pil.size, (0,0,0,0))
     draw = ImageDraw.Draw(overlay, 'RGBA')
     x, y = center
@@ -158,27 +155,126 @@ def draw_posture_angle_overlay(img_pil, center, angle_deg, length=60, alpha=128)
     draw.ellipse([x-7, y-7, x+7, y+7], fill=(255,255,255,180))
     img_pil.alpha_composite(overlay)
 
-def draw_pose_skeleton(img_pil, landmarks, width, height, connections, joint_color=(0,255,0,180), bone_color=(255,255,255,180)):
+def lerp_color(c1, c2, t):
+    return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(4))
+
+def draw_dashed_line(draw, p1, p2, color, width, dash_length=10, gap_length=8):
+    # Draw a dashed line from p1 to p2
+    x1, y1 = p1
+    x2, y2 = p2
+    total_len = math.hypot(x2 - x1, y2 - y1)
+    if total_len == 0:
+        return
+    dx = (x2 - x1) / total_len
+    dy = (y2 - y1) / total_len
+    num_dashes = int(total_len // (dash_length + gap_length)) + 1
+    for i in range(num_dashes):
+        start = i * (dash_length + gap_length)
+        end = min(start + dash_length, total_len)
+        if start >= total_len:
+            break
+        sx = x1 + dx * start
+        sy = y1 + dy * start
+        ex = x1 + dx * end
+        ey = y1 + dy * end
+        draw.line([(sx, sy), (ex, ey)], fill=color, width=width)
+
+def draw_gradient_line(draw, p1, p2, color1, color2, width, steps=16):
+    # Draw a line from p1 to p2 with a gradient from color1 to color2
+    x1, y1 = p1
+    x2, y2 = p2
+    for i in range(steps):
+        t0 = i / steps
+        t1 = (i + 1) / steps
+        sx = x1 + (x2 - x1) * t0
+        sy = y1 + (y2 - y1) * t0
+        ex = x1 + (x2 - x1) * t1
+        ey = y1 + (y2 - y1) * t1
+        color = lerp_color(color1, color2, t0)
+        draw.line([(sx, sy), (ex, ey)], fill=color, width=width)
+
+def draw_pose_skeleton(img_pil, landmarks, width, height):
     """
-    Draws the pose skeleton on a PIL image using the given landmarks and connections.
-    - landmarks: list of pose landmarks (normalized)
-    - width, height: image dimensions
-    - connections: list of (start_idx, end_idx) tuples
-    - joint_color: RGBA color for joints
-    - bone_color: RGBA color for bones
+    Draws a beautiful skeleton overlay with red (left), green (torso/head), blue (right),
+    using thin, anti-aliased, dashed and gradient lines as in the mock.
     """
     draw = ImageDraw.Draw(img_pil, 'RGBA')
+    # Color definitions (RGBA)
+    RED1 = (255, 80, 80, 180)
+    RED2 = (200, 0, 0, 180)
+    BLUE1 = (80, 120, 255, 180)
+    BLUE2 = (0, 0, 200, 180)
+    GREEN1 = (80, 255, 120, 180)
+    GREEN2 = (0, 200, 0, 180)
+    # Line width scaling
+    lw = max(1, int(min(width, height) * 0.008))
+    joint_r = max(2, int(lw * 1.2))
+    # Connections by part
+    mp_pose = mp.solutions.pose
+    # (start, end, color1, color2, style)
+    SKELETON = [
+        # Left arm (red, gradient, solid)
+        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.LEFT_ELBOW.value, RED1, RED2, 'solid'),
+        (mp_pose.PoseLandmark.LEFT_ELBOW.value, mp_pose.PoseLandmark.LEFT_WRIST.value, RED2, RED1, 'solid'),
+        # Right arm (blue, gradient, solid)
+        (mp_pose.PoseLandmark.RIGHT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_ELBOW.value, BLUE1, BLUE2, 'solid'),
+        (mp_pose.PoseLandmark.RIGHT_ELBOW.value, mp_pose.PoseLandmark.RIGHT_WRIST.value, BLUE2, BLUE1, 'solid'),
+        # Left leg (red, gradient, dashed)
+        (mp_pose.PoseLandmark.LEFT_HIP.value, mp_pose.PoseLandmark.LEFT_KNEE.value, RED1, RED2, 'dashed'),
+        (mp_pose.PoseLandmark.LEFT_KNEE.value, mp_pose.PoseLandmark.LEFT_ANKLE.value, RED2, RED1, 'dashed'),
+        # Right leg (blue, gradient, dashed)
+        (mp_pose.PoseLandmark.RIGHT_HIP.value, mp_pose.PoseLandmark.RIGHT_KNEE.value, BLUE1, BLUE2, 'dashed'),
+        (mp_pose.PoseLandmark.RIGHT_KNEE.value, mp_pose.PoseLandmark.RIGHT_ANKLE.value, BLUE2, BLUE1, 'dashed'),
+        # Torso (green, solid)
+        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_SHOULDER.value, GREEN1, GREEN2, 'solid'),
+        (mp_pose.PoseLandmark.LEFT_HIP.value, mp_pose.PoseLandmark.RIGHT_HIP.value, GREEN2, GREEN1, 'solid'),
+        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.LEFT_HIP.value, GREEN1, GREEN2, 'solid'),
+        (mp_pose.PoseLandmark.RIGHT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_HIP.value, GREEN2, GREEN1, 'solid'),
+        # Head/neck (green, solid)
+        (mp_pose.PoseLandmark.NOSE.value, mp_pose.PoseLandmark.LEFT_EYE.value, GREEN1, GREEN2, 'solid'),
+        (mp_pose.PoseLandmark.NOSE.value, mp_pose.PoseLandmark.RIGHT_EYE.value, GREEN1, GREEN2, 'solid'),
+        (mp_pose.PoseLandmark.LEFT_EYE.value, mp_pose.PoseLandmark.LEFT_EAR.value, GREEN2, GREEN1, 'solid'),
+        (mp_pose.PoseLandmark.RIGHT_EYE.value, mp_pose.PoseLandmark.RIGHT_EAR.value, GREEN2, GREEN1, 'solid'),
+        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.NOSE.value, GREEN1, GREEN2, 'solid'),
+        (mp_pose.PoseLandmark.RIGHT_SHOULDER.value, mp_pose.PoseLandmark.NOSE.value, GREEN2, GREEN1, 'solid'),
+    ]
     # Draw bones
-    for start_idx, end_idx in connections:
+    for start_idx, end_idx, c1, c2, style in SKELETON:
         p1 = landmarks[start_idx]
         p2 = landmarks[end_idx]
-        x1, y1 = int(p1.x * width), int(p1.y * height)
-        x2, y2 = int(p2.x * width), int(p2.y * height)
-        draw.line([(x1, y1), (x2, y2)], fill=bone_color, width=5)
-    # Draw joints
-    for lm in landmarks:
+        xy1 = (int(p1.x * width), int(p1.y * height))
+        xy2 = (int(p2.x * width), int(p2.y * height))
+        if style == 'solid':
+            draw_gradient_line(draw, xy1, xy2, c1, c2, lw)
+        elif style == 'dashed':
+            # Dashed with gradient: break into segments, alternate color
+            steps = 12
+            for i in range(steps):
+                t0 = i / steps
+                t1 = (i + 0.5) / steps
+                if i % 2 == 0:
+                    seg_c = lerp_color(c1, c2, t0)
+                    sx = xy1[0] + (xy2[0] - xy1[0]) * t0
+                    sy = xy1[1] + (xy2[1] - xy1[1]) * t0
+                    ex = xy1[0] + (xy2[0] - xy1[0]) * t1
+                    ey = xy1[1] + (xy2[1] - xy1[1]) * t1
+                    draw.line([(sx, sy), (ex, ey)], fill=seg_c, width=lw)
+    # Draw joints (small circles)
+    joint_indices = set()
+    for start_idx, end_idx, c1, c2, style in SKELETON:
+        joint_indices.add(start_idx)
+        joint_indices.add(end_idx)
+    for idx in joint_indices:
+        lm = landmarks[idx]
         x, y = int(lm.x * width), int(lm.y * height)
-        draw.ellipse([x-6, y-6, x+6, y+6], fill=joint_color)
+        # Color by part
+        if idx in [mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.LEFT_ELBOW.value, mp_pose.PoseLandmark.LEFT_WRIST.value, mp_pose.PoseLandmark.LEFT_HIP.value, mp_pose.PoseLandmark.LEFT_KNEE.value, mp_pose.PoseLandmark.LEFT_ANKLE.value]:
+            color = RED1
+        elif idx in [mp_pose.PoseLandmark.RIGHT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_ELBOW.value, mp_pose.PoseLandmark.RIGHT_WRIST.value, mp_pose.PoseLandmark.RIGHT_HIP.value, mp_pose.PoseLandmark.RIGHT_KNEE.value, mp_pose.PoseLandmark.RIGHT_ANKLE.value]:
+            color = BLUE1
+        else:
+            color = GREEN1
+        draw.ellipse([x-joint_r, y-joint_r, x+joint_r, y+joint_r], fill=color)
 
 def annotate_video(input_path, output_path, font_path):
     cap = cv2.VideoCapture(input_path)
@@ -220,7 +316,7 @@ def annotate_video(input_path, output_path, font_path):
                 # Convert to PIL for overlay
                 img_pil = Image.fromarray(cv2.cvtColor(frame_annotated, cv2.COLOR_BGR2RGB)).convert('RGBA')
                 # Draw skeleton
-                draw_pose_skeleton(img_pil, landmarks, width, height, POSE_CONNECTIONS)
+                draw_pose_skeleton(img_pil, landmarks, width, height)
                 # Calculate hip midpoint for posture angle overlay
                 left_hip = landmarks[mp_pose.PoseLandmark.LEFT_HIP.value]
                 right_hip = landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value]
