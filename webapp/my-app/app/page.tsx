@@ -8,12 +8,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Upload, Play, Mail, CheckCircle, Activity, Timer, Target } from "lucide-react"
+import { supabase } from "@/lib/supabaseClient"
 
 export default function RunningAnalyst() {
   const [isUploaded, setIsUploaded] = useState(false)
   const [email, setEmail] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const handleFileSelect = (file: File) => {
     if (file.type.startsWith("video/")) {
@@ -40,13 +43,58 @@ export default function RunningAnalyst() {
     setIsDragOver(false)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setUploadError(null)
     if (selectedFile && email) {
-      // Simulate upload process
-      setTimeout(() => {
-        setIsUploaded(true)
-      }, 1000)
+      try {
+        // Generate a unique filename
+        const fileExt = selectedFile.name.split('.').pop()
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${fileExt}`
+        const filePath = `uploads/${fileName}`
+
+        // Get Supabase credentials
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        const bucket = 'running-form-analysis-input'
+        const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${filePath}`
+
+        // Use XMLHttpRequest to track progress
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', uploadUrl)
+          xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`)
+          xhr.setRequestHeader('x-upsert', 'false')
+
+          xhr.upload.onprogress = (event) => {
+            if (event.lengthComputable) {
+              setUploadProgress(Math.round((event.loaded / event.total) * 100))
+            }
+          }
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              setUploadProgress(100)
+              setIsUploaded(true)
+              resolve()
+            } else {
+              setUploadError('Upload failed')
+              reject(new Error('Upload failed'))
+            }
+          }
+
+          xhr.onerror = () => {
+            setUploadError('Upload failed')
+            reject(new Error('Upload failed'))
+          }
+
+          const formData = new FormData()
+          formData.append('file', selectedFile)
+          xhr.send(formData)
+        })
+      } catch (err: any) {
+        setUploadError(err.message || 'Upload failed')
+      }
     }
   }
 
@@ -205,8 +253,24 @@ export default function RunningAnalyst() {
                 <p className="text-xs text-gray-500">We'll send your detailed analysis report to this email address</p>
               </div>
 
+              {/* Progress Bar */}
+              {uploadProgress !== null && (
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-200"
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                  <div className="text-xs text-gray-600 mt-1 text-right">{uploadProgress}%</div>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {uploadError && (
+                <div className="text-red-600 text-sm mb-2">{uploadError}</div>
+              )}
+
               {/* Submit Button */}
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={!selectedFile || !email}>
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={!selectedFile || !email || uploadProgress !== null}>
                 Upload Video & Get Analysis
               </Button>
             </form>
