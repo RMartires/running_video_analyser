@@ -72,9 +72,22 @@ export default function RunningAnalyst() {
             }
           }
 
-          xhr.onload = () => {
+          xhr.onload = async () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               setUploadProgress(100)
+              // Insert into video_submissions table
+              const { error: insertError } = await supabase.from('video_submissions').insert([
+                {
+                  file_name: fileName,
+                  email: email,
+                  // processed, output_file_name, processed_data will use defaults/null
+                }
+              ])
+              if (insertError) {
+                setUploadError('Upload succeeded but database insert failed: ' + insertError.message)
+                reject(new Error('Database insert failed'))
+                return
+              }
               setIsUploaded(true)
               resolve()
             } else {
