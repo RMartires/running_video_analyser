@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import mediapipe as mp
 import math
+from collections import Counter
 
 # Example metrics for demonstration (replace with your own logic)
 def get_metrics_for_frame(frame_idx):
@@ -100,7 +101,7 @@ def draw_text_panel(frame, metrics, font_path, font_size=32, panel_pos=(20, 20),
     # Draw background rectangle
     margin = 10
     x, y = panel_pos
-    draw.rectangle([x - margin, y - margin, x + text_w + margin, y + text_h + margin], fill=(30, 30, 30, 200))
+    draw.rectangle([x - margin, y - margin, x + text_w  + margin, y + text_h + margin], fill=(30, 30, 30, 200))
     # Draw text
     draw.multiline_text((x, y), text, font=font, fill=(255, 255, 255, 255))
     # Optionally draw arc (for backward compatibility, not used in main loop)
@@ -350,29 +351,30 @@ def annotate_video(input_path, output_path, font_path):
     fps = cap.get(cv2.CAP_PROP_FPS)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    frame_idx = 0
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     mp_pose = mp.solutions.pose
-    # MediaPipe pose connections (subset for clarity)
-    POSE_CONNECTIONS = [
-        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_SHOULDER.value),
-        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.LEFT_ELBOW.value),
-        (mp_pose.PoseLandmark.LEFT_ELBOW.value, mp_pose.PoseLandmark.LEFT_WRIST.value),
-        (mp_pose.PoseLandmark.RIGHT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_ELBOW.value),
-        (mp_pose.PoseLandmark.RIGHT_ELBOW.value, mp_pose.PoseLandmark.RIGHT_WRIST.value),
-        (mp_pose.PoseLandmark.LEFT_SHOULDER.value, mp_pose.PoseLandmark.LEFT_HIP.value),
-        (mp_pose.PoseLandmark.RIGHT_SHOULDER.value, mp_pose.PoseLandmark.RIGHT_HIP.value),
-        (mp_pose.PoseLandmark.LEFT_HIP.value, mp_pose.PoseLandmark.RIGHT_HIP.value),
-        (mp_pose.PoseLandmark.LEFT_HIP.value, mp_pose.PoseLandmark.LEFT_KNEE.value),
-        (mp_pose.PoseLandmark.LEFT_KNEE.value, mp_pose.PoseLandmark.LEFT_ANKLE.value),
-        (mp_pose.PoseLandmark.RIGHT_HIP.value, mp_pose.PoseLandmark.RIGHT_KNEE.value),
-        (mp_pose.PoseLandmark.RIGHT_KNEE.value, mp_pose.PoseLandmark.RIGHT_ANKLE.value),
-    ]
+    # --- First pass: collect foot strike values ---
+    foot_strike_list = []
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    for frame_idx in range(frame_count):
+        ret, frame = cap.read()
+        if not ret:
+            break
+        metrics = get_metrics_for_frame(frame_idx)
+        foot_strike_list.append(metrics['Foot Strike'])
+    from collections import Counter
+    foot_strike_mode = Counter(foot_strike_list).most_common(1)[0][0]
+    # --- Second pass: annotate frames ---
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    frame_idx = 0
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             metrics = get_metrics_for_frame(frame_idx)
+            # Use per-frame metrics, but constant foot strike
+            metrics['Foot Strike'] = foot_strike_mode
             # Draw text panel as before
             frame_annotated = draw_text_panel(frame, metrics, font_path, font_size=max(16, int(height * 0.045)), draw_arc=False)
             # Extract pose landmarks for this frame
