@@ -242,7 +242,7 @@ def generate_video_url(file_path: str) -> str:
     """
     # For now, return a placeholder URL
     # You'll need to implement this based on your Supabase storage setup
-    base_url = os.environ.get("SUPABASE_STORAGE_URL", "https://your-project.supabase.co/storage/v1/object/public")
+    base_url = os.environ.get("SUPABASE_URL", "https://your-project.supabase.co/storage/v1/object/public")
     bucket_name = os.environ.get("SUPABASE_BUCKET", "running-form-analysis-input")
     
     return f"{base_url}/{bucket_name}/{file_path}"
