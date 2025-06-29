@@ -116,44 +116,111 @@ def draw_text_panel(frame, metrics, font_path, font_size=32, panel_pos=(20, 20),
 
 def draw_posture_angle_overlay(img_pil, center, angle_deg, length=60, alpha=128):
     """
-    Draws a visually appealing geometric angle overlay:
-    - Vertical line: semi-transparent white
-    - Torso line: vibrant green
-    - Wedge: soft radial gradient from transparent to green
-    - Vertex: small semi-transparent white circle
-    center: (x, y) vertex of the angle (hip midpoint in overlay)
-    angle_deg: posture angle in degrees (0 is up, positive is clockwise)
-    length: length of the lines
-    alpha: transparency (0-255)
+    Draws a visually rich geometric angle overlay:
+    - Two dashed arms (vertical and at angle)
+    - Dashed or gradient arc connecting the arms (arc dashes follow the curve)
+    - Transparent gradient wedge filling the angle
+    - Angle value annotation
+    All elements scale with image size.
     """
-    overlay = Image.new('RGBA', img_pil.size, (0,0,0,0))
-    draw = ImageDraw.Draw(overlay, 'RGBA')
+    draw = ImageDraw.Draw(img_pil, 'RGBA')
     x, y = center
-    # Vertical line (up)
-    vert_end = (x, y - length)
-    # Torso line (rotated by angle_deg from vertical, clockwise)
+    # Scale length and radius to image size
+    img_w, img_h = img_pil.size
+    length = int(min(img_w, img_h) * 0.13)
+    arc_radius = int(length * 1.05)
+    arc_width = max(2, int(length * 0.13))
+    # Colors
+    ARM_COLOR = (80, 255, 120, 220)  # Green, semi-transparent
+    ARC_COLOR1 = (80, 255, 120, 200) # Green
+    ARC_COLOR2 = (255, 255, 80, 200) # Yellow
+    WEDGE_COLOR = (80, 255, 120, 90) # Green, more transparent
+    # Geometry
     angle_rad = math.radians(angle_deg)
+    # Arm endpoints
+    vert_end = (x, y - length)
     torso_end = (x + length * math.sin(angle_rad), y - length * math.cos(angle_rad))
-    # Draw wedge (soft radial gradient)
-    steps = 60
+    # 1. Draw transparent gradient wedge
+    steps = 40
     for i in range(steps):
         frac0 = i / steps
         frac1 = (i+1) / steps
         a0 = -math.pi/2 + angle_rad * frac0
         a1 = -math.pi/2 + angle_rad * frac1
-        p0 = (x + length * 0.95 * math.cos(a0 + math.pi/2), y + length * 0.95 * math.sin(a0 + math.pi/2))
-        p1 = (x + length * 0.95 * math.cos(a1 + math.pi/2), y + length * 0.95 * math.sin(a1 + math.pi/2))
-        # Gradient: more transparent near the vertex, more green at the edge
-        grad_alpha = int(alpha * (0.3 + 0.7 * frac1))
-        color = (60, 255, 100, grad_alpha)
+        p0 = (x + arc_radius * math.cos(a0), y + arc_radius * math.sin(a0))
+        p1 = (x + arc_radius * math.cos(a1), y + arc_radius * math.sin(a1))
+        grad_alpha = int(WEDGE_COLOR[3] * (0.3 + 0.7 * frac1))
+        color = (WEDGE_COLOR[0], WEDGE_COLOR[1], WEDGE_COLOR[2], grad_alpha)
         draw.polygon([center, p0, p1], fill=color)
-    # Draw vertical line (white, semi-transparent, thick)
-    draw.line([center, vert_end], fill=(255,255,255,180), width=7)
-    # Draw torso line (vibrant green, semi-transparent, thick)
-    draw.line([center, torso_end], fill=(60,255,100,220), width=7)
-    # Draw vertex circle (white, semi-transparent)
-    draw.ellipse([x-7, y-7, x+7, y+7], fill=(255,255,255,180))
-    img_pil.alpha_composite(overlay)
+    # 2. Draw dashed arms
+    def draw_dashed(draw, p1, p2, color, width, dash=10, gap=7):
+        dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+        dist = math.hypot(dx, dy)
+        if dist == 0:
+            return
+        dx, dy = dx / dist, dy / dist
+        n = int(dist // (dash + gap)) + 1
+        for i in range(n):
+            start = i * (dash + gap)
+            end = min(start + dash, dist)
+            if start >= dist:
+                break
+            sx = p1[0] + dx * start
+            sy = p1[1] + dy * start
+            ex = p1[0] + dx * end
+            ey = p1[1] + dy * end
+            draw.line([(sx, sy), (ex, ey)], fill=color, width=width)
+    draw_dashed(draw, center, vert_end, ARM_COLOR, arc_width)
+    draw_dashed(draw, center, torso_end, ARM_COLOR, arc_width)
+    # 3. Draw dashed/gradient arc (arc dashes follow the curve)
+    def draw_dashed_arc(draw, center, radius, angle_start, angle_end, color1, color2, width, dash_angle_deg=12, gap_angle_deg=8):
+        # Draw a dashed arc from angle_start to angle_end (radians), dashes follow the arc
+        if abs(angle_end - angle_start) < 1e-4:
+            return
+        total_angle = angle_end - angle_start
+        arc_len = abs(total_angle * radius)
+        n = int(abs(math.degrees(total_angle)) // (dash_angle_deg + gap_angle_deg)) + 1
+        for i in range(n):
+            dash_a0 = angle_start + total_angle * (i * (dash_angle_deg + gap_angle_deg) / math.degrees(total_angle))
+            dash_a1 = dash_a0 + math.radians(dash_angle_deg)
+            if dash_a0 > angle_end:
+                break
+            dash_a1 = min(dash_a1, angle_end)
+            # Gradient color for this dash
+            t = (dash_a0 - angle_start) / (angle_end - angle_start) if angle_end != angle_start else 0
+            arc_color = (
+                int(color1[0] + (color2[0] - color1[0]) * t),
+                int(color1[1] + (color2[1] - color1[1]) * t),
+                int(color1[2] + (color2[2] - color1[2]) * t),
+                int(color1[3] + (color2[3] - color1[3]) * t),
+            )
+            # Draw dash as many small segments along the arc
+            segs = 8
+            for j in range(segs):
+                seg_a0 = dash_a0 + (dash_a1 - dash_a0) * (j / segs)
+                seg_a1 = dash_a0 + (dash_a1 - dash_a0) * ((j+1) / segs)
+                sx = center[0] + radius * math.cos(seg_a0)
+                sy = center[1] + radius * math.sin(seg_a0)
+                ex = center[0] + radius * math.cos(seg_a1)
+                ey = center[1] + radius * math.sin(seg_a1)
+                draw.line([(sx, sy), (ex, ey)], fill=arc_color, width=width)
+    arc_angle_start = -math.pi/2
+    arc_angle_end = -math.pi/2 + angle_rad
+    draw_dashed_arc(draw, center, arc_radius, arc_angle_start, arc_angle_end, ARC_COLOR1, ARC_COLOR2, arc_width)
+    # 4. Draw vertex circle
+    draw.ellipse([x-arc_width, y-arc_width, x+arc_width, y+arc_width], fill=(255,255,255,180))
+    # 5. Annotate angle value
+    font_size = max(14, int(length * 0.35))
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", font_size)
+    except Exception:
+        font = ImageFont.load_default()
+    label = f"{angle_deg:.1f}°"
+    # Place label near arc midpoint
+    mid_angle = arc_angle_start + (arc_angle_end - arc_angle_start) * 0.55
+    lx = x + (arc_radius + arc_width*2) * math.cos(mid_angle)
+    ly = y + (arc_radius + arc_width*2) * math.sin(mid_angle)
+    draw.text((lx, ly), label, font=font, fill=(255,255,255,220))
 
 def lerp_color(c1, c2, t):
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(4))
@@ -327,7 +394,7 @@ def annotate_video(input_path, output_path, font_path):
                     angle = float(metrics.get('Posture Angle', 0))
                 except Exception:
                     angle = 0
-                draw_posture_angle_overlay(img_pil, angle_center, angle_deg=angle, length=60, alpha=128)
+                # draw_posture_angle_overlay(img_pil, angle_center, angle_deg=angle, length=60, alpha=128)
                 frame_final = cv2.cvtColor(np.array(img_pil.convert('RGB')), cv2.COLOR_RGB2BGR)
             else:
                 # Fallback: no pose detected
@@ -337,7 +404,7 @@ def annotate_video(input_path, output_path, font_path):
                     angle = float(metrics.get('Posture Angle', 0))
                 except Exception:
                     angle = 0
-                draw_posture_angle_overlay(img_pil, angle_center, angle_deg=angle, length=60, alpha=128)
+                # draw_posture_angle_overlay(img_pil, angle_center, angle_deg=angle, length=60, alpha=128)
                 frame_final = cv2.cvtColor(np.array(img_pil.convert('RGB')), cv2.COLOR_RGB2BGR)
             out.write(frame_final)
             frame_idx += 1
