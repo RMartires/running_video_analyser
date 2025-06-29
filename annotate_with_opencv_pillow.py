@@ -5,6 +5,7 @@ import os
 import mediapipe as mp
 import math
 from collections import Counter
+import subprocess
 
 # Example metrics for demonstration (replace with your own logic)
 def get_metrics_for_frame(frame_idx):
@@ -414,6 +415,15 @@ def annotate_video(input_path, output_path, font_path):
     out.release()
     print(f"Annotated video saved to {output_path}")
 
+def fix_mp4_with_ffmpeg(input_path, output_path):
+    cmd = [
+        'ffmpeg', '-y', '-i', input_path,
+        '-vf', 'format=yuv420p',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output_path
+    ]
+    print(f"Running ffmpeg to re-encode mp4: {' '.join(cmd)}")
+    subprocess.run(cmd, check=True)
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 3:
@@ -426,4 +436,10 @@ if __name__ == "__main__":
     if not os.path.exists(font_path):
         print(f"Font file not found: {font_path}")
         sys.exit(1)
-    annotate_video(input_path, output_path, font_path) 
+    annotate_video(input_path, output_path, font_path)
+    # Post-process with ffmpeg for web compatibility
+    if output_path.lower().endswith('.mp4'):
+        fixed_output = output_path[:-4] + '_fixed.mp4'
+        fix_mp4_with_ffmpeg(output_path, fixed_output)
+        os.replace(fixed_output, output_path)
+        print(f"Web-compatible video saved to {output_path}") 
