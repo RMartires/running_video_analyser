@@ -4,6 +4,7 @@ import requests
 from datetime import datetime
 from typing import Optional
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +15,12 @@ logger = logging.getLogger(__name__)
 # Brevo API configuration
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
+
+# Supabase configuration for signed URLs
+SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_KEY = os.environ["SUPABASE_KEY"]
+BUCKET = os.environ.get("SUPABASE_BUCKET", "running-form-analysis-input")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def send_processing_completion_email(
     user_email: str,
@@ -214,21 +221,23 @@ def send_processing_completion_email(
 
 def generate_video_url(file_path: str) -> str:
     """
-    Generate a public URL for the processed video.
-    This assumes you have a public bucket or can generate signed URLs.
-    
+    Generate a signed URL for the processed video that expires in 1 week.
     Args:
-        file_path: Path to the video file in storage
-        
+        file_path: Path to the video file in storage (e.g., outputs/annotated_foo.mp4)
     Returns:
-        str: Public URL to the video
+        str: Signed URL to the video
     """
-    # For now, return a placeholder URL
-    # You'll need to implement this based on your Supabase storage setup
-    base_url = os.environ.get("SUPABASE_URL", "https://your-project.supabase.co/storage/v1/object/public")
-    bucket_name = os.environ.get("SUPABASE_BUCKET", "running-form-analysis-input")
-    
-    return f"{base_url}/{bucket_name}/{file_path}"
+    try:
+        # 1 week = 604800 seconds
+        result = supabase.storage.from_(BUCKET).create_signed_url(file_path, expires_in=604800)
+        signed_url = result.get('signedURL') or result.get('signed_url')
+        if not signed_url:
+            logger.error(f"No signed URL returned for {file_path}: {result}")
+            return ""
+        return signed_url
+    except Exception as e:
+        logger.error(f"Failed to generate signed URL for {file_path}: {e}")
+        return ""
 
 if __name__ == "__main__":
     # Test the email functionality
