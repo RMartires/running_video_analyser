@@ -429,7 +429,7 @@ def annotate_video(input_path, output_path, font_path):
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(image_rgb)
             del image_rgb
-            if results is not None and hasattr(results, 'pose_landmarks') and results.pose_landmarks:
+            if results is not None and hasattr(results, 'pose_landmarks') and results.pose_landmarks:  # type: ignore[attr-defined]
                 landmarks = results.pose_landmarks.landmark
                 img_pil = Image.fromarray(cv2.cvtColor(frame_annotated, cv2.COLOR_BGR2RGB)).convert('RGBA')
                 draw_pose_skeleton(img_pil, landmarks, width, height)
@@ -480,9 +480,9 @@ def annotate_video(input_path, output_path, font_path):
 
 def fix_mp4_with_ffmpeg(input_path, output_path):
     cmd = [
-        'ffmpeg', '-y', '-i', input_path,
+        'ffmpeg', '-threads', '1', '-y', '-i', input_path,
         '-vf', 'format=yuv420p',
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output_path
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-b:v', '1M', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output_path
     ]
     logger.info(f"Running ffmpeg to re-encode mp4: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
