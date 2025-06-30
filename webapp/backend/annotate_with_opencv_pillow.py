@@ -2,12 +2,14 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import os
-import mediapipe as mp
+from mediapipe.python.solutions import pose as mp_pose
 import math
 from collections import Counter
 import subprocess
 import json
 import logging
+import gc
+import psutil
 
 # Configure logging for the annotation script
 logging.basicConfig(level=logging.INFO)
@@ -285,7 +287,6 @@ def draw_pose_skeleton(img_pil, landmarks, width, height):
     lw = max(1, int(min(width, height) * 0.008))
     joint_r = max(2, int(lw * 1.2))
     # Connections by part
-    mp_pose = mp.solutions.pose
     # (start, end, color1, color2, style)
     SKELETON = [
         # Left arm (red, gradient, solid)
@@ -351,20 +352,51 @@ def draw_pose_skeleton(img_pil, landmarks, width, height):
             color = GREEN1
         draw.ellipse([x-joint_r, y-joint_r, x+joint_r, y+joint_r], fill=color)
 
-def annotate_video(input_path, output_path, font_path):
+def downscale_video(input_path, output_path, target_width=1280, target_height=720):
     cap = cv2.VideoCapture(input_path)
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    if width <= target_width and height <= target_height:
+        cap.release()
+        return input_path  # No need to downscale
+    out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame_resized = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_AREA)
+        out.write(frame_resized)
+    cap.release()
+    out.release()
+    logger.info(f"Downscaled video saved to {output_path}")
+    return output_path
+
+def annotate_video(input_path, output_path, font_path):
+    # Downscale video if needed
+    downscaled_path = input_path
+    temp_downscaled = None
+    cap = cv2.VideoCapture(input_path)
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+    if width > 1280 or height > 720:
+        temp_downscaled = input_path + '.downscaled.mp4'
+        downscaled_path = downscale_video(input_path, temp_downscaled, 1280, 720)
+        cap = cv2.VideoCapture(downscaled_path)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+    # Now process the (possibly downscaled) video
+    cap = cv2.VideoCapture(downscaled_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    mp_pose = mp.solutions.pose
-    
-    logger.info(f"Processing video: {input_path}")
+    logger.info(f"Processing video: {downscaled_path}")
     logger.info(f"Frame count: {frame_count}")
     logger.info(f"Width: {width}, Height: {height}, FPS: {fps}")
-    
     # --- First pass: collect foot strike values ---
     foot_strike_list = []
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -374,38 +406,33 @@ def annotate_video(input_path, output_path, font_path):
             break
         metrics = get_metrics_for_frame(frame_idx)
         foot_strike_list.append(metrics['Foot Strike'])
+        del frame, metrics
+        if frame_idx % 100 == 0:
+            gc.collect()
     from collections import Counter
     foot_strike_mode = Counter(foot_strike_list).most_common(1)[0][0]
     logger.info(f"Foot strike mode: {foot_strike_mode}")
-    
     # --- Second pass: annotate frames ---
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     frame_idx = 0
     final_metrics = None
-    
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             metrics = get_metrics_for_frame(frame_idx)
-            # Use per-frame metrics, but constant foot strike
             metrics['Foot Strike'] = foot_strike_mode
-            # Store final metrics for return
             final_metrics = metrics.copy()
-            
             # Draw text panel as before
             frame_annotated = draw_text_panel(frame, metrics, font_path, font_size=max(16, int(height * 0.045)), draw_arc=False)
-            # Extract pose landmarks for this frame
             image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = pose.process(image_rgb)
-            if results.pose_landmarks:
+            del image_rgb
+            if results is not None and hasattr(results, 'pose_landmarks') and results.pose_landmarks:
                 landmarks = results.pose_landmarks.landmark
-                # Convert to PIL for overlay
                 img_pil = Image.fromarray(cv2.cvtColor(frame_annotated, cv2.COLOR_BGR2RGB)).convert('RGBA')
-                # Draw skeleton
                 draw_pose_skeleton(img_pil, landmarks, width, height)
-                # Calculate hip midpoint for posture angle overlay
                 left_hip = landmarks[mp_pose.PoseLandmark.LEFT_HIP.value]
                 right_hip = landmarks[mp_pose.PoseLandmark.RIGHT_HIP.value]
                 hip_mid_x = int((left_hip.x + right_hip.x) / 2 * width)
@@ -417,8 +444,8 @@ def annotate_video(input_path, output_path, font_path):
                     angle = 0
                 # draw_posture_angle_overlay(img_pil, angle_center, angle_deg=angle, length=60, alpha=128)
                 frame_final = cv2.cvtColor(np.array(img_pil.convert('RGB')), cv2.COLOR_RGB2BGR)
+                del img_pil, landmarks, left_hip, right_hip
             else:
-                # Fallback: no pose detected
                 img_pil = Image.fromarray(cv2.cvtColor(frame_annotated, cv2.COLOR_BGR2RGB)).convert('RGBA')
                 angle_center = (width // 2, int(height * 0.35))
                 try:
@@ -427,25 +454,28 @@ def annotate_video(input_path, output_path, font_path):
                     angle = 0
                 # draw_posture_angle_overlay(img_pil, angle_center, angle_deg=angle, length=60, alpha=128)
                 frame_final = cv2.cvtColor(np.array(img_pil.convert('RGB')), cv2.COLOR_RGB2BGR)
+                del img_pil
             out.write(frame_final)
+            del frame, frame_annotated, frame_final, metrics, results
+            if frame_idx % 100 == 0:
+                gc.collect()
+                process = psutil.Process(os.getpid())
+                logger.info(f"Frame {frame_idx}: Memory usage: {process.memory_info().rss / 1024 / 1024:.2f} MB")
             frame_idx += 1
-            
             # Print metrics for the last frame
             if frame_idx == frame_count:
                 logger.info(f"Last frame metrics: {final_metrics}")
-    
     cap.release()
     out.release()
+    if temp_downscaled and os.path.exists(temp_downscaled):
+        os.remove(temp_downscaled)
     logger.info(f"Annotated video saved to {output_path}")
     logger.info(f"Total frames processed: {frame_idx}")
     logger.info(f"Returning final metrics: {final_metrics}")
-    
-    # Ensure we always return valid metrics
     if final_metrics is None:
-        final_metrics = get_metrics_for_frame(0)  # Fallback to first frame metrics
+        final_metrics = get_metrics_for_frame(0)
         final_metrics['Foot Strike'] = foot_strike_mode
         logger.info(f"Using fallback metrics: {final_metrics}")
-    
     return final_metrics
 
 def fix_mp4_with_ffmpeg(input_path, output_path):
