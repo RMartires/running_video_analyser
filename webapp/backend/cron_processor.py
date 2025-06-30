@@ -11,7 +11,7 @@ import sys
 
 # Add the parent directory to the path to import the annotation script
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from annotate_with_opencv_pillow import annotate_video
+from annotate_with_opencv_pillow import annotate_and_process
 
 # Load environment variables
 load_dotenv()
@@ -68,8 +68,8 @@ def process_video_submission(file_name: str) -> tuple[str, dict]:
             logger.warning(f"Font file not found: {font_path}, using default")
             font_path = None
         
-        # Call the annotation function directly
-        final_metrics = annotate_video(local_input, local_output, font_path)
+        # Call the annotation and post-processing function directly
+        final_metrics = annotate_and_process(local_input, local_output, font_path)
         
         # Ensure final_metrics is a dictionary
         if final_metrics is None:

@@ -457,6 +457,18 @@ def fix_mp4_with_ffmpeg(input_path, output_path):
     logger.info(f"Running ffmpeg to re-encode mp4: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
+def annotate_and_process(input_path, output_path, font_path):
+    """
+    Annotate the video and run ffmpeg post-processing. Returns the final metrics.
+    """
+    metrics = annotate_video(input_path, output_path, font_path)
+    if output_path.lower().endswith('.mp4'):
+        fixed_output = output_path[:-4] + '_fixed.mp4'
+        fix_mp4_with_ffmpeg(output_path, fixed_output)
+        os.replace(fixed_output, output_path)
+        logger.info(f"Web-compatible video saved to {output_path}")
+    return metrics
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 3:
@@ -469,13 +481,6 @@ if __name__ == "__main__":
     if not os.path.exists(font_path):
         print(f"Font file not found: {font_path}")
         sys.exit(1)
-    final_metrics = annotate_video(input_path, output_path, font_path)
-    # Post-process with ffmpeg for web compatibility
-    if output_path.lower().endswith('.mp4'):
-        fixed_output = output_path[:-4] + '_fixed.mp4'
-        fix_mp4_with_ffmpeg(output_path, fixed_output)
-        os.replace(fixed_output, output_path)
-        print(f"Web-compatible video saved to {output_path}")
-    
+    final_metrics = annotate_and_process(input_path, output_path, font_path)
     # Print final metrics for standalone execution
     print(f"Final metrics: {final_metrics}") 
