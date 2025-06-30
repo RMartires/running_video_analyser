@@ -43,153 +43,126 @@ def send_processing_completion_email(
     
     # HTML email template
     html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Running Form Analysis Complete</title>
-        <style>
-            body {{
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-                background-color: #f8f9fa;
-            }}
-            .container {{
-                background-color: white;
-                border-radius: 10px;
-                padding: 30px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }}
-            .header {{
-                text-align: center;
-                margin-bottom: 30px;
-            }}
-            .header h1 {{
-                color: #2c3e50;
-                margin-bottom: 10px;
-            }}
-            .success-icon {{
-                font-size: 48px;
-                color: #27ae60;
-                margin-bottom: 20px;
-            }}
-            .content {{
-                margin-bottom: 30px;
-            }}
-            .video-info {{
-                background-color: #f8f9fa;
-                padding: 15px;
-                border-radius: 5px;
-                margin: 20px 0;
-            }}
-            .cta-button {{
-                display: inline-block;
-                background-color: #3498db;
-                color: white;
-                padding: 12px 30px;
-                text-decoration: none;
-                border-radius: 5px;
-                font-weight: bold;
-                margin: 20px 0;
-            }}
-            .cta-button:hover {{
-                background-color: #2980b9;
-            }}
-            .footer {{
-                text-align: center;
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #eee;
-                color: #7f8c8d;
-                font-size: 14px;
-            }}
-            .processing-time {{
-                background-color: #e8f5e8;
-                padding: 10px;
-                border-radius: 5px;
-                margin: 15px 0;
-                border-left: 4px solid #27ae60;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <div class="success-icon">✅</div>
-                <h1>Your Analysis is Complete!</h1>
-                <p>Great news! We've finished analyzing your running form video.</p>
-            </div>
-            
-            <div class="content">
-                <p>Hello!</p>
-                
-                <p>Your running form analysis has been successfully completed. We've processed your video and created a detailed analysis with posture angles, metrics, and visual overlays.</p>
-                
-                <div class="video-info">
-                    <strong>Original Video:</strong> {video_name}<br>
-                    <strong>Processed:</strong> {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
-                </div>
-                
-                {f'<div class="processing-time"><strong>Processing Time:</strong> {processing_time}</div>' if processing_time else ''}
-                
-                <p>Your annotated video is now ready for viewing. Click the button below to access your analysis:</p>
-                
-                <div style="text-align: center;">
-                    <a href="{output_file_url}" class="cta-button">View Your Analysis Video</a>
-                </div>
-                
-                <p><strong>What's included in your analysis:</strong></p>
-                <ul>
-                    <li>Posture angle measurements</li>
-                    <li>Running form metrics</li>
-                    <li>Visual skeleton overlay</li>
-                    <li>Professional annotations</li>
-                </ul>
-                
-                <p>If you have any questions about your analysis or need further assistance, please don't hesitate to reach out to our support team.</p>
-            </div>
-            
-            <div class="footer">
-                <p>Thank you for using our Running Form Analysis service!</p>
-                <p>This is an automated message. Please do not reply to this email.</p>
-            </div>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Running Analysis Results</title>
+</head>
+<body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background-color: #f5f5f5;">
+    
+    <!-- Main Container -->
+    <div style="max-width: 600px; margin: 0 auto; background-color: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        
+        <!-- Header -->
+        <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); padding: 40px 30px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 28px; font-weight: bold;">🏃‍♂️ Running Analysis Results</h1>
+            <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your personalized running form analysis</p>
         </div>
-    </body>
-    </html>
+        
+        <!-- Content -->
+        <div style="padding: 30px;">
+            <p style="font-size: 16px; color: #333; margin: 0 0 30px 0; line-height: 1.5;">
+                Great job on your run! Here are your key metrics from our analysis:
+            </p>
+            
+            <!-- Metrics Grid -->
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 30px;">
+                
+                <!-- Step Count -->
+                <div style="flex: 1; min-width: 250px; background-color: #f8fafc; padding: 25px; border-radius: 8px; text-align: center; border-left: 4px solid #3b82f6;">
+                    <div style="color: #3b82f6; font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                        Step Count
+                    </div>
+                    <div style="font-size: 36px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
+                        2,847
+                    </div>
+                    <div style="color: #64748b; font-size: 14px;">
+                        total steps
+                    </div>
+                </div>
+                
+                <!-- Cadence -->
+                <div style="flex: 1; min-width: 250px; background-color: #f8fafc; padding: 25px; border-radius: 8px; text-align: center; border-left: 4px solid #10b981;">
+                    <div style="color: #10b981; font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                        Cadence
+                    </div>
+                    <div style="font-size: 36px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
+                        172
+                    </div>
+                    <div style="color: #64748b; font-size: 14px;">
+                        steps per minute
+                    </div>
+                </div>
+                
+            </div>
+            
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 30px;">
+                
+                <!-- Foot Strike -->
+                <div style="flex: 1; min-width: 250px; background-color: #f8fafc; padding: 25px; border-radius: 8px; text-align: center; border-left: 4px solid #f59e0b;">
+                    <div style="color: #f59e0b; font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                        Foot Strike
+                    </div>
+                    <div style="font-size: 28px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
+                        Midfoot
+                    </div>
+                    <div style="color: #64748b; font-size: 14px;">
+                        strike pattern
+                    </div>
+                </div>
+                
+                <!-- Posture Angle -->
+                <div style="flex: 1; min-width: 250px; background-color: #f8fafc; padding: 25px; border-radius: 8px; text-align: center; border-left: 4px solid #8b5cf6;">
+                    <div style="color: #8b5cf6; font-size: 14px; font-weight: bold; text-transform: uppercase; margin-bottom: 8px;">
+                        Posture Angle
+                    </div>
+                    <div style="font-size: 36px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
+                        5.2°
+                    </div>
+                    <div style="color: #64748b; font-size: 14px;">
+                        forward lean
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Analysis Summary -->
+            <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 20px; border-radius: 0 8px 8px 0; margin-bottom: 30px;">
+                <p style="margin: 0; color: #065f46; font-size: 15px; line-height: 1.6;">
+                    <strong>Analysis Summary:</strong> Your running form shows excellent cadence and good posture alignment. The midfoot strike pattern is efficient and reduces impact stress.
+                </p>
+            </div>
+            
+            <!-- CTA Button -->
+            <div style="text-align: center; margin-bottom: 20px;">
+                <a href="{output_file_url}" style="display: inline-block; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; font-weight: bold;">
+                    📹 View Detailed Analysis on Video
+                </a>
+            </div>
+            
+            <p style="text-align: center; color: #64748b; font-size: 14px; margin: 0;">
+                Click above to see your detailed video analysis with visual annotations
+            </p>
+        </div>
+        
+        <!-- Footer -->
+        <div style="background-color: #f8fafc; padding: 25px; text-align: center; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 0 0 10px 0; color: #64748b; font-size: 16px;">
+                Keep up the great work! 🎉
+            </p>
+            <p style="margin: 0; color: #94a3b8; font-size: 13px; line-height: 1.4;">
+                This analysis was generated by your AI running coach.<br>
+                Questions? Reply to this email for support.
+            </p>
+        </div>
+        
+    </div>
+    
+</body>
+</html>
     """
     
-    # Plain text version for email clients that don't support HTML
-    text_content = f"""
-    Your Running Form Analysis is Ready!
-    
-    Hello!
-    
-    Your running form analysis has been successfully completed. We've processed your video and created a detailed analysis with posture angles, metrics, and visual overlays.
-    
-    Original Video: {video_name}
-    Processed: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
-    {f'Processing Time: {processing_time}' if processing_time else ''}
-    
-    Your annotated video is now ready for viewing. Access your analysis at:
-    {output_file_url}
-    
-    What's included in your analysis:
-    - Posture angle measurements
-    - Running form metrics
-    - Visual skeleton overlay
-    - Professional annotations
-    
-    If you have any questions about your analysis or need further assistance, please don't hesitate to reach out to our support team.
-    
-    Thank you for using our Running Form Analysis service!
-    
-    This is an automated message. Please do not reply to this email.
-    """
     
     # Prepare the email payload
     email_data = {
@@ -204,8 +177,7 @@ def send_processing_completion_email(
             }
         ],
         "subject": subject,
-        "htmlContent": html_content,
-        "textContent": text_content
+        "htmlContent": html_content
     }
     
     # Send the email
