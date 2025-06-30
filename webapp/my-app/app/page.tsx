@@ -128,13 +128,15 @@ export default function RunningAnalyst() {
               <p className="font-medium">{email}</p>
             </div>
             <p className="text-sm text-muted-foreground">
-              Our experts will analyze your running form, pace, and technique. You'll receive your personalized report
-              within 24-48 hours.
+              We will analyze your running form, pace, and technique. You'll receive your personalized report
+              within 5 mins.
             </p>
             <Button
               onClick={() => {
                 setIsUploaded(false)
                 setSelectedFile(null)
+                setUploadProgress(null)
+                setUploadError(null)
                 setEmail("")
               }}
               variant="outline"
@@ -160,7 +162,7 @@ export default function RunningAnalyst() {
           </div>
           <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-4">Running Video Analysis</h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-8">
-            Upload your running video and get professional analysis to improve your form, prevent injuries, and enhance
+            Upload your running video and get data driven analysis to improve your form, prevent injuries, and enhance
             your performance.
           </p>
 
@@ -169,12 +171,12 @@ export default function RunningAnalyst() {
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <Timer className="w-8 h-8 text-blue-600 mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Quick Analysis</h3>
-              <p className="text-sm text-gray-600">Get your detailed report within 24-48 hours</p>
+              <p className="text-sm text-gray-600">Get your detailed report within 5 mins</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <Target className="w-8 h-8 text-blue-600 mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Expert Insights</h3>
-              <p className="text-sm text-gray-600">Professional analysis from certified running coaches</p>
+              <p className="text-sm text-gray-600">Professional analysis using AI and computer vision</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <Play className="w-8 h-8 text-blue-600 mx-auto mb-3" />
@@ -189,7 +191,7 @@ export default function RunningAnalyst() {
           <CardHeader>
             <CardTitle className="text-2xl text-center">Upload Your Running Video</CardTitle>
             <CardDescription className="text-center">
-              Upload a video of your running form for professional analysis
+              keep it landscape and greater than 30 seconds long for optimim analysis
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -268,7 +270,7 @@ export default function RunningAnalyst() {
 
               {/* Progress Bar */}
               {uploadProgress !== null && (
-                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-2 p-[10px]">
                   <div
                     className="bg-blue-600 h-3 rounded-full transition-all duration-200"
                     style={{ width: `${uploadProgress}%` }}
@@ -293,8 +295,8 @@ export default function RunningAnalyst() {
         {/* Additional Info */}
         <div className="max-w-2xl mx-auto mt-8 text-center">
           <p className="text-sm text-gray-600">
-            Your video will be analyzed by certified running coaches and biomechanics experts. We'll provide insights on
-            your stride, posture, cadence, and recommendations for improvement.
+            Your video will be analyzed by our proprietary biomechanics models. We'll provide insights on
+            your stride, posture, cadence, and other key metrics.
           </p>
         </div>
       </div>
