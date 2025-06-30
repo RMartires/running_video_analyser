@@ -6,6 +6,12 @@ import mediapipe as mp
 import math
 from collections import Counter
 import subprocess
+import json
+import logging
+
+# Configure logging for the annotation script
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Example metrics for demonstration (replace with your own logic)
 def get_metrics_for_frame(frame_idx):
@@ -354,6 +360,11 @@ def annotate_video(input_path, output_path, font_path):
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     mp_pose = mp.solutions.pose
+    
+    logger.info(f"Processing video: {input_path}")
+    logger.info(f"Frame count: {frame_count}")
+    logger.info(f"Width: {width}, Height: {height}, FPS: {fps}")
+    
     # --- First pass: collect foot strike values ---
     foot_strike_list = []
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -365,9 +376,13 @@ def annotate_video(input_path, output_path, font_path):
         foot_strike_list.append(metrics['Foot Strike'])
     from collections import Counter
     foot_strike_mode = Counter(foot_strike_list).most_common(1)[0][0]
+    logger.info(f"Foot strike mode: {foot_strike_mode}")
+    
     # --- Second pass: annotate frames ---
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     frame_idx = 0
+    final_metrics = None
+    
     with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
         while True:
             ret, frame = cap.read()
@@ -376,6 +391,9 @@ def annotate_video(input_path, output_path, font_path):
             metrics = get_metrics_for_frame(frame_idx)
             # Use per-frame metrics, but constant foot strike
             metrics['Foot Strike'] = foot_strike_mode
+            # Store final metrics for return
+            final_metrics = metrics.copy()
+            
             # Draw text panel as before
             frame_annotated = draw_text_panel(frame, metrics, font_path, font_size=max(16, int(height * 0.045)), draw_arc=False)
             # Extract pose landmarks for this frame
@@ -411,9 +429,24 @@ def annotate_video(input_path, output_path, font_path):
                 frame_final = cv2.cvtColor(np.array(img_pil.convert('RGB')), cv2.COLOR_RGB2BGR)
             out.write(frame_final)
             frame_idx += 1
+            
+            # Print metrics for the last frame
+            if frame_idx == frame_count:
+                logger.info(f"Last frame metrics: {final_metrics}")
+    
     cap.release()
     out.release()
-    print(f"Annotated video saved to {output_path}")
+    logger.info(f"Annotated video saved to {output_path}")
+    logger.info(f"Total frames processed: {frame_idx}")
+    logger.info(f"Returning final metrics: {final_metrics}")
+    
+    # Ensure we always return valid metrics
+    if final_metrics is None:
+        final_metrics = get_metrics_for_frame(0)  # Fallback to first frame metrics
+        final_metrics['Foot Strike'] = foot_strike_mode
+        logger.info(f"Using fallback metrics: {final_metrics}")
+    
+    return final_metrics
 
 def fix_mp4_with_ffmpeg(input_path, output_path):
     cmd = [
@@ -421,7 +454,7 @@ def fix_mp4_with_ffmpeg(input_path, output_path):
         '-vf', 'format=yuv420p',
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', output_path
     ]
-    print(f"Running ffmpeg to re-encode mp4: {' '.join(cmd)}")
+    logger.info(f"Running ffmpeg to re-encode mp4: {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
 if __name__ == "__main__":
@@ -436,10 +469,13 @@ if __name__ == "__main__":
     if not os.path.exists(font_path):
         print(f"Font file not found: {font_path}")
         sys.exit(1)
-    annotate_video(input_path, output_path, font_path)
+    final_metrics = annotate_video(input_path, output_path, font_path)
     # Post-process with ffmpeg for web compatibility
     if output_path.lower().endswith('.mp4'):
         fixed_output = output_path[:-4] + '_fixed.mp4'
         fix_mp4_with_ffmpeg(output_path, fixed_output)
         os.replace(fixed_output, output_path)
-        print(f"Web-compatible video saved to {output_path}") 
+        print(f"Web-compatible video saved to {output_path}")
+    
+    # Print final metrics for standalone execution
+    print(f"Final metrics: {final_metrics}") 

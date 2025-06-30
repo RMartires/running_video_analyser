@@ -19,7 +19,8 @@ def send_processing_completion_email(
     user_email: str,
     video_name: str,
     output_file_url: str,
-    processing_time: Optional[str] = None
+    processing_time: Optional[str] = None,
+    metrics: Optional[dict] = None
 ) -> bool:
     """
     Send a processing completion email to the user using Brevo's Transactional Email API.
@@ -29,6 +30,7 @@ def send_processing_completion_email(
         video_name: Original video filename
         output_file_url: Public URL to the processed video
         processing_time: Optional processing duration string
+        metrics: Optional dictionary containing analysis metrics
     
     Returns:
         bool: True if email sent successfully, False otherwise
@@ -40,6 +42,16 @@ def send_processing_completion_email(
     
     # Create email content
     subject = "Your Running Form Analysis is Ready! 🏃‍♂️"
+    
+    # Extract metrics for email template
+    step_count = metrics.get('Step Count', 'N/A') if metrics else 'N/A'
+    cadence = metrics.get('Cadence', 'N/A') if metrics else 'N/A'
+    foot_strike = metrics.get('Foot Strike', 'N/A') if metrics else 'N/A'
+    posture_angle = metrics.get('Posture Angle', 'N/A') if metrics else 'N/A'
+    
+    # Format posture angle if it's a number
+    if isinstance(posture_angle, (int, float)):
+        posture_angle = f"{posture_angle:.1f}°"
     
     # HTML email template
     html_content = f"""
@@ -75,7 +87,7 @@ def send_processing_completion_email(
                         Step Count
                     </div>
                     <div style="font-size: 36px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
-                        2,847
+                        {step_count}
                     </div>
                     <div style="color: #64748b; font-size: 14px;">
                         total steps
@@ -88,7 +100,7 @@ def send_processing_completion_email(
                         Cadence
                     </div>
                     <div style="font-size: 36px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
-                        172
+                        {cadence}
                     </div>
                     <div style="color: #64748b; font-size: 14px;">
                         steps per minute
@@ -105,7 +117,7 @@ def send_processing_completion_email(
                         Foot Strike
                     </div>
                     <div style="font-size: 28px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
-                        Midfoot
+                        {foot_strike.title()}
                     </div>
                     <div style="color: #64748b; font-size: 14px;">
                         strike pattern
@@ -118,7 +130,7 @@ def send_processing_completion_email(
                         Posture Angle
                     </div>
                     <div style="font-size: 36px; font-weight: bold; color: #1e293b; margin-bottom: 5px;">
-                        5.2°
+                        {posture_angle}
                     </div>
                     <div style="color: #64748b; font-size: 14px;">
                         forward lean
@@ -130,7 +142,7 @@ def send_processing_completion_email(
             <!-- Analysis Summary -->
             <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; padding: 20px; border-radius: 0 8px 8px 0; margin-bottom: 30px;">
                 <p style="margin: 0; color: #065f46; font-size: 15px; line-height: 1.6;">
-                    <strong>Analysis Summary:</strong> Your running form shows excellent cadence and good posture alignment. The midfoot strike pattern is efficient and reduces impact stress.
+                    <strong>Analysis Summary:</strong> Your running form shows excellent cadence and good posture alignment. The {foot_strike} strike pattern is efficient and reduces impact stress.
                 </p>
             </div>
             
@@ -162,7 +174,6 @@ def send_processing_completion_email(
 </body>
 </html>
     """
-    
     
     # Prepare the email payload
     email_data = {

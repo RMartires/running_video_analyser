@@ -7,6 +7,11 @@ import subprocess
 from enum import Enum
 import time
 from send_email import send_processing_completion_email, generate_video_url
+import sys
+
+# Add the parent directory to the path to import the annotation script
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from annotate_with_opencv_pillow import annotate_video
 
 # Load environment variables
 load_dotenv()
@@ -34,10 +39,10 @@ SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 BUCKET = os.environ.get("SUPABASE_BUCKET", "running-form-analysis-input")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def process_video_submission(file_name: str) -> str:
+def process_video_submission(file_name: str) -> tuple[str, dict]:
     """
     Process a single video submission using the same logic as the main controller.
-    Returns the output file path on success.
+    Returns a tuple of (output_file_path, final_metrics) on success.
     """
     local_input = f"./temp/{os.path.basename(file_name)}"
     local_output = f"./temp/annotated_{os.path.basename(file_name)}"
@@ -57,11 +62,27 @@ def process_video_submission(file_name: str) -> str:
 
     # 2. Run annotation script
     try:
-        subprocess.run([
-            "python3", "./annotate_with_opencv_pillow.py", local_input, local_output
-        ], check=True)
+        # Use a system font for the annotation
+        font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        if not os.path.exists(font_path):
+            logger.warning(f"Font file not found: {font_path}, using default")
+            font_path = None
+        
+        # Call the annotation function directly
+        final_metrics = annotate_video(local_input, local_output, font_path)
+        
+        # Ensure final_metrics is a dictionary
+        if final_metrics is None:
+            final_metrics = {}
+            logger.warning("Annotation function returned None metrics")
+        elif not isinstance(final_metrics, dict):
+            logger.warning(f"Annotation function returned non-dict metrics: {type(final_metrics)}")
+            final_metrics = {}
+        
         logger.info(f"Annotation completed for: {file_name}")
-    except subprocess.CalledProcessError as e:
+        logger.info(f"Final metrics type: {type(final_metrics)}")
+        logger.info(f"Final metrics: {final_metrics}")
+    except Exception as e:
         logger.error(f"Annotation script failed for {file_name}: {e}")
         raise
 
@@ -82,7 +103,7 @@ def process_video_submission(file_name: str) -> str:
     except Exception as e:
         logger.warning(f"Failed to clean up local files for {file_name}: {e}")
 
-    return output_file
+    return output_file, final_metrics
 
 def get_next_unprocessed_submission():
     """
@@ -164,7 +185,7 @@ def main():
         start_time = time.time()
         
         # Process the video
-        output_file = process_video_submission('uploads/'+file_name)
+        output_file, final_metrics = process_video_submission('uploads/'+file_name)
         
         # Calculate processing time
         processing_time = time.time() - start_time
@@ -177,6 +198,7 @@ def main():
         processed_data = {
             'updated_at': datetime.utcnow().isoformat(),
             'output_file': output_file,
+            'final_metrics': final_metrics
         }
         mark_submission_processed(submission_id, output_file, processed_data)
         
@@ -188,7 +210,8 @@ def main():
                 user_email=email,
                 video_name=file_name,
                 output_file_url=video_url,
-                processing_time=processing_time_str
+                processing_time=processing_time_str,
+                metrics=final_metrics
             )
             if email_sent:
                 logger.info(f"Email notification sent successfully to {email}")
